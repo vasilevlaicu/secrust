@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use quote::quote;
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::EdgeRef;
-use crate::cfg_builder::builder::CfgBuilder;
+use crate::cfg_builder::{builder::CfgBuilder, node::ConditionalExpr};
 use crate::cfg_builder::node::{CfgNode};
 use proc_macro2::{Span, TokenTree, TokenStream};
 
@@ -54,17 +54,39 @@ impl CfgBuilder {
                         }
                     },
                     CfgNode::Condition(_, Some(conditional_expr)) => {
-                        let expr = conditional_expr.to_syn_expr();
-                        let updated_expr = self.substitute_variables(&expr, &variable_state);
-                        println!("Condition before substitution: {}", quote! { #expr });
-                        println!("Condition after substitution: {}", quote! { #updated_expr });
-
-                        working_condition = Some(if let Some(existing_cond) = &working_condition {
-                            syn::parse2(quote! { #updated_expr && #existing_cond }).expect("Failed to parse conjunction")
+                        // Check if we are on the false branch
+                        let is_false_branch = self.is_false_branch(&path, node_index);
+                    
+                        // Update the condition based on the branch
+                        let updated_expr = if is_false_branch {
+                            // Negate the condition if we are on the false branch
+                            match conditional_expr {
+                                ConditionalExpr::If(expr_if) => {
+                                    ConditionalExpr::If(Box::new(CfgBuilder::negate_condition(*expr_if.clone())))
+                                }
+                                ConditionalExpr::While(expr_while) => {
+                                    ConditionalExpr::While(Box::new(CfgBuilder::negate_condition(*expr_while.clone())))
+                                }
+                                _ => conditional_expr.clone(),
+                            }
                         } else {
-                            updated_expr
+                            conditional_expr.clone()
+                        };
+                    
+                        // Convert the updated conditional expression back to a `syn::Expr` for substitution
+                        let expr = updated_expr.to_syn_expr();
+                        let substituted_expr = self.substitute_variables(&expr, &variable_state);
+                    
+                        println!("Condition before substitution: {}", quote! { #expr });
+                        println!("Condition after substitution: {}", quote! { #substituted_expr });
+                    
+                        // Update the working condition
+                        working_condition = Some(if let Some(existing_cond) = &working_condition {
+                            syn::parse2(quote! { #substituted_expr && #existing_cond }).expect("Failed to parse conjunction")
+                        } else {
+                            substituted_expr
                         });
-                    },
+                    },                    
                     CfgNode::Postcondition(_, Some(expr)) | CfgNode::Invariant(_, Some(expr)) => {
                         let expr = self.substitute_variables(expr, &variable_state);
                         println!("Postcondition/Invariant before substitution: {}", quote! { #expr });
@@ -97,6 +119,19 @@ impl CfgBuilder {
         }
 
         updated_postconditions
+    }
+
+    fn is_false_branch(&self, path: &[NodeIndex], current_node: NodeIndex) -> bool {
+        // Iterate over edges connecting from the current node in the path
+        let current_index = path.iter().position(|&n| n == current_node);
+        if let Some(index) = current_index {
+            if let Some(next_node) = path.get(index + 1) {
+                if let Some(edge) = self.graph.edges_connecting(current_node, *next_node).next() {
+                    return edge.weight() == "false";
+                }
+            }
+        }
+        false
     }
 
     pub fn recursive_substitution(&self, expr: &Expr, var: &str, replacement: &Expr) -> Expr {
