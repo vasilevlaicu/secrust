@@ -30,7 +30,7 @@ impl CfgBuilder {
         visited: &mut HashSet<NodeIndex>,
     ) {
         if visited.contains(&current_node) {
-            //return; // Avoid cycles
+           // Avoid cycles by not returning
         }
         visited.insert(current_node);
         current_path.push(current_node);
@@ -53,26 +53,6 @@ impl CfgBuilder {
         } else {
             // Continue exploring adjacent nodes
             for (target, edge_label) in edges_info {
-                if let Some(CfgNode::Condition(_, Some(expr))) = self.graph.node_weight(current_node) {
-                    // Clone the condition before modification
-                    let cloned_expr = expr.clone();
-                    let updated_expr = if edge_label == "false" {
-                        // Negate the cloned condition if the edge label is "false"
-                        match cloned_expr {
-                            ConditionalExpr::If(expr_if) => ConditionalExpr::If(Box::new(CfgBuilder::negate_condition(*expr_if))),
-                            ConditionalExpr::While(expr_while) => ConditionalExpr::While(Box::new(CfgBuilder::negate_condition(*expr_while))),
-                            _ => cloned_expr,
-                        }
-                    } else {
-                        // Use the cloned condition directly if the edge label is "true"
-                        cloned_expr
-                    };
-
-                    let condition_str = quote! { #updated_expr }.to_string();
-                    let new_label = format!("assume: {}", condition_str);
-                    // Update the current path's node with the new label and potentially negated condition
-                    *self.graph.node_weight_mut(current_node).unwrap() = CfgNode::Condition(new_label, Some(updated_expr));
-                }
                 self.find_paths(target, current_path, paths, visited);
             }
         }
