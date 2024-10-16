@@ -1,0 +1,22 @@
+[package]
+name = "secrust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+petgraph = "0.6"
+proc-macro2 = "1.0"
+syn = { version = "1.0", features = ["full", "visit", "extra-traits"] }
+quote = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+regex = "1.5"
+z3 = "0.9.0"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "cargo-secrust-verify"
+path = "src/main.rs"  # You'll need to create this file
