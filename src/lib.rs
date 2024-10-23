@@ -77,6 +77,7 @@ pub fn run_verification(file_path: &PathBuf, generate_dot: bool) -> Result<(), B
     }
 
     verifier::verify_conditions_for_paths();
+    verifier::verify_unsat_condition();
     println!("Verification completed for {:?}", file_path);
     Ok(())
 }

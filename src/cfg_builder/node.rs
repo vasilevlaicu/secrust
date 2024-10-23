@@ -3,6 +3,7 @@ use quote::ToTokens;
 use syn::{Expr, ExprForLoop, ExprIf, ExprReturn, ItemFn, Stmt};
 
 #[derive(Clone)]
+#[derive(Debug)]
 pub enum ConditionalExpr {
     If(Box<Expr>),
     ForLoop(ExprForLoop),
@@ -30,6 +31,7 @@ impl ToTokens for ConditionalExpr {
 }
 
 #[derive(Clone)]
+#[derive(Debug)]
 pub enum CfgNode {
     Function(String, Option<ItemFn>),
     Precondition(String, Option<Expr>),

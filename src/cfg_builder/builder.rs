@@ -246,13 +246,13 @@ impl Visit<'_> for CfgBuilder {
     }
 
     fn visit_expr(&mut self, i: &Expr) {
-        println!("Visiting expression: {:?}", i);
+        // println!("Visiting expression: {:?}", i);
         match i {
             Expr::If(expr_if) => self.handle_if_statement(expr_if),
             Expr::While(expr_while) => self.handle_while_loop(expr_while),
             Expr::ForLoop(expr_for) => self.handle_for_loop(expr_for),
             Expr::Return(expr_return) => {
-                println!("Handling return statement: {:?}", expr_return);
+                // println!("Handling return statement: {:?}", expr_return);
                 self.handle_return_statement(expr_return);
             },
             Expr::Call(expr_call) => self.handle_call(expr_call),

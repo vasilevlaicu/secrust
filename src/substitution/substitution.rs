@@ -12,52 +12,38 @@ impl CfgBuilder {
         let mut updated_postconditions = Vec::new();
 
         for path in paths {
-            let mut variable_state = std::collections::HashMap::new();
+            let mut variable_state = HashMap::new();
             let mut working_condition: Option<syn::Expr> = None;
+            let mut node_levels = HashMap::new();
+            let mut current_level = 0;
 
+            // Assign levels to nodes based on their position in the path
+            for &node_index in path.iter() {
+                node_levels.insert(node_index, current_level);
+                current_level += 1;
+            }
+
+            // Traverse the path in reverse (from postcondition up to precondition)
             for &node_index in path.iter().rev() {
                 match &self.graph[node_index] {
                     CfgNode::Statement(stmt_str, stmt_option) => {
-                        println!("Processing statement: {}", stmt_str);
                         if let Some((var, expr)) = self.parse_assignment(stmt_str) {
-                            println!("Assignment found: {} = {}", var, quote! { #expr });
+                            let node_level = node_levels[&node_index];
 
-                            if let Some(cond) = &working_condition {
-                                let new_cond = self.recursive_substitution(cond, &var, &expr);
-                                println!("Substituting in condition: {} -> {}", var, quote! { #expr });
-                                println!("New condition after substitution: {}", quote! { #new_cond });
-                                working_condition = Some(new_cond);
+                            // Check if there is a working condition that needs substitution
+                            if let Some(mut cond) = working_condition.take() {
+                                // Substitute once per variable
+                                cond = self.recursive_substitution(&cond, &var, &expr);
+                                working_condition = Some(cond);
                             }
 
+                            // Track the current variable state for potential future substitution
                             variable_state.insert(var.clone(), expr.clone());
-                        }
-
-                        if let Some(stmt) = stmt_option {
-                            if let Stmt::Local(local) = stmt {
-                                let Local { pat, init, .. } = local;
-                                if let Some((_, expr)) = init {
-                                    if let syn::Pat::Ident(pat_ident) = pat {
-                                        let var = pat_ident.ident.to_string();
-                                        println!("Local declaration found: {} = {}", var, quote! { #expr });
-
-                                        if let Some(cond) = &working_condition {
-                                            let new_cond = self.recursive_substitution(cond, &var, expr);
-                                            println!("Substituting in condition: {} -> {}", var, quote! { #expr });
-                                            println!("New condition after substitution: {}", quote! { #new_cond });
-                                            working_condition = Some(new_cond);
-                                        }
-
-                                        variable_state.insert(var.clone(), *expr.clone());
-                                    }
-                                }
-                            }
                         }
                     },
                     CfgNode::Condition(_, Some(conditional_expr)) => {
-                        // Check if we are on the false branch
+                        // Don't substitute conditions but add them in the implication chain
                         let is_false_branch = self.is_false_branch(&path, node_index);
-                    
-                        // Update the condition based on the branch
                         let updated_expr = if is_false_branch {
                             // Negate the condition if we are on the false branch
                             match conditional_expr {
@@ -72,38 +58,27 @@ impl CfgBuilder {
                         } else {
                             conditional_expr.clone()
                         };
-                    
-                        // Convert the updated conditional expression back to a `syn::Expr` for substitution
-                        let expr = updated_expr.to_syn_expr();
-                        let substituted_expr = self.substitute_variables(&expr, &variable_state);
-                    
-                        println!("Condition before substitution: {}", quote! { #expr });
-                        println!("Condition after substitution: {}", quote! { #substituted_expr });
-                    
-                        // Update the working condition
-                        working_condition = Some(if let Some(existing_cond) = &working_condition {
-                            syn::parse2(quote! { #substituted_expr >> #existing_cond }).expect("Failed to parse conjunction")
-                        } else {
-                            substituted_expr
-                        });
-                    },                    
-                    CfgNode::Postcondition(_, Some(expr)) | CfgNode::Invariant(_, Some(expr)) => {
-                        let expr = self.substitute_variables(expr, &variable_state);
-                        println!("Postcondition/Invariant before substitution: {}", quote! { #expr });
-                        println!("Postcondition/Invariant after substitution: {}", quote! { #expr });
 
-                        working_condition = Some(if let Some(existing_cond) = &working_condition {
+                        let expr = updated_expr.to_syn_expr();
+                        working_condition = Some(if let Some(existing_cond) = working_condition.take() {
+                            syn::parse2(quote! { #expr >> #existing_cond }).expect("Failed to parse conjunction")
+                        } else {
+                            expr.clone()
+                        });
+                    },
+                    CfgNode::Postcondition(_, Some(expr)) | CfgNode::Invariant(_, Some(expr)) => {
+                        // Substitute variables in the postcondition/invariant and chain with the current condition
+                        let expr = expr.clone();
+                        working_condition = Some(if let Some(existing_cond) = working_condition.take() {
                             syn::parse2(quote! { #expr >> #existing_cond }).expect("Failed to parse conjunction")
                         } else {
                             expr
                         });
                     },
                     CfgNode::Precondition(_, Some(expr)) => {
+                        // Substitute variables in the precondition and chain with the current condition
                         let expr = self.substitute_variables(expr, &variable_state);
-                        println!("Precondition before substitution: {}", quote! { #expr });
-                        println!("Precondition after substitution: {}", quote! { #expr });
-
-                        working_condition = Some(if let Some(existing_cond) = &working_condition {
+                        working_condition = Some(if let Some(existing_cond) = working_condition.take() {
                             syn::parse2(quote! { #expr >> #existing_cond }).expect("Failed to parse conjunction")
                         } else {
                             expr
@@ -134,14 +109,19 @@ impl CfgBuilder {
         false
     }
 
-    pub fn recursive_substitution(&self, expr: &Expr, var: &str, replacement: &Expr) -> Expr {
-        println!("Substituting in expr: {:?}", quote! {#expr});
+    pub fn recursive_substitution(&self, expr: &Expr, var: &str, replacement_without_paren: &Expr) -> Expr {
+        // println!("Substituting in expr: {:?}", quote! {#expr});
         self.print_expr_details(expr);
-
+        let replacement = &Expr::Paren(ExprParen {
+            attrs: Vec::new(),
+            paren_token: syn::token::Paren(Span::call_site()),
+            expr: Box::new(replacement_without_paren.clone()),
+        });
+    
         match expr {
             Expr::Path(expr_path) => {
                 if expr_path.path.is_ident(var) {
-                    println!("Substituting {} with {}", var, quote! {#replacement});
+                    // println!("Substituting {} with {}", var, quote! {#replacement});
                     replacement.clone()
                 } else {
                     expr.clone()
@@ -149,7 +129,7 @@ impl CfgBuilder {
             },
             Expr::Macro(expr_macro) => {
                 let new_tokens = self.substitute_in_token_stream(&expr_macro.mac.tokens, var, replacement);
-                println!("new_tokens:{:?}", new_tokens);
+                // println!("new_tokens:{:?}", new_tokens);
                 Expr::Macro(ExprMacro {
                     attrs: expr_macro.attrs.clone(),
                     mac: Macro {
@@ -169,8 +149,7 @@ impl CfgBuilder {
                 })
             },
             Expr::Binary(bin) => {
-                println!("Binary Expression: left = {}, op = {}, right = {}", 
-                    quote! {#bin.left}, quote! {#bin.op}, quote! {#bin.right});
+                // println!("Binary Expression: left = {}, op = {}, right = {}", quote! {#bin.left}, quote! {#bin.op}, quote! {#bin.right});
                 Expr::Binary(ExprBinary {
                     attrs: bin.attrs.clone(),
                     left: Box::new(self.recursive_substitution(&bin.left, var, replacement)),
@@ -222,7 +201,7 @@ impl CfgBuilder {
                 })
             },
             _ => {
-                println!("No substitution performed for: {}", quote! {#expr});
+                // println!("No substitution performed for: {}", quote! {#expr});
                 expr.clone()
             },
         }
@@ -259,26 +238,26 @@ impl CfgBuilder {
             format!("{};", stmt.trim_end())
         };
 
-        println!("Parsing statement: {}", stmt);
+        // println!("Parsing statement: {}", stmt);
     
         // Parse the statement into a syn::Stmt
         let stmt: syn::Stmt = match syn::parse_str(&stmt) {
             Ok(s) => s,
             Err(e) => {
-                println!("Failed to parse statement: {}", e);
+                // println!("Failed to parse statement: {}", e);
                 return None;
             }
         };
     
         // Debug print the parsed statement
-        println!("Parsed syn::Stmt: {:#?}", &stmt);
+        // println!("Parsed syn::Stmt: {:#?}", &stmt);
     
         if let syn::Stmt::Expr(syn::Expr::Assign(assign)) | syn::Stmt::Semi(syn::Expr::Assign(assign), _) = stmt.clone() {
             // Handle simple assignments like `count = 0;`
             if let syn::Expr::Path(path) = *assign.left {
                 if let Some(ident) = path.path.get_ident() {
                     let var = ident.to_string();
-                    println!("Found assignment: {} = {:?}", var, *assign.right);
+                    // println!("Found assignment: {} = {:?}", var, *assign.right);
                     return Some((var, *assign.right));
                 }
             }
@@ -293,13 +272,13 @@ impl CfgBuilder {
                         op: assign_op.op.clone(),
                         right: assign_op.right.clone(),
                     });
-                    println!("Found compound assignment: {} = {:?}", var, right_expr);
+                    // println!("Found compound assignment: {} = {:?}", var, right_expr);
                     return Some((var, right_expr));
                 }
             }
         }
     
-        println!("No valid assignment found in statement: {:#?}", stmt);
+        // println!("No valid assignment found in statement: {:#?}", stmt);
         None
     }
 
@@ -338,14 +317,14 @@ impl CfgBuilder {
     }
 
     fn print_expr_details(&self, expr: &Expr) {
-        println!("Expr details: {:#?}", expr);
+        // println!("Expr details: {:#?}", expr);
     }
 
     fn substitute_in_token_stream(&self, tokens: &TokenStream, var: &str, replacement: &Expr) -> TokenStream {
-        println!("SUBSTITUTING IN MACRO");
-        println!("to be replaced: {}", var);
-        println!("token stream: {}", tokens);
-        println!("replacement: {:#?}", quote! { #replacement });
+        // println!("SUBSTITUTING IN MACRO");
+        // println!("to be replaced: {}", var);
+        // println!("token stream: {}", tokens);
+        // println!("replacement: {:#?}", quote! { #replacement });
     
         // Convert the replacement expression to a string
         let replacement_string = quote! { #replacement }.to_string();
@@ -353,30 +332,30 @@ impl CfgBuilder {
         let replacement_token_stream: TokenStream = replacement_string.parse().expect("Failed to parse replacement string");
     
         tokens.clone().into_iter().flat_map(|tt| {
-            println!("{}", tt.to_string());
-            println!("var {}", var.to_string());
+            // println!("{}", tt.to_string());
+            // println!("var {}", var.to_string());
             match &tt {
                 TokenTree::Ident(ident) if ident.to_string() == var => {
-                    println!("Replacing identifier: {}", ident);
-                    println!("replacement token stream: {}", replacement_token_stream);
+                    // println!("Replacing identifier: {}", ident);
+                    // println!("replacement token stream: {}", replacement_token_stream);
                     replacement_token_stream.clone().into_iter().collect::<Vec<_>>().into_iter()
                 },
                 TokenTree::Group(group) => {
-                    println!("Entering group: {}", group.stream());
+                    // println!("Entering group: {}", group.stream());
                     let new_stream = self.substitute_in_token_stream(&group.stream(), var, replacement);
-                    println!("Replaced group: {:#?}", new_stream);
+                    // println!("Replaced group: {:#?}", new_stream);
                     vec![TokenTree::Group(proc_macro2::Group::new(group.delimiter(), new_stream))].into_iter()
                 },
                 TokenTree::Punct(punct) => {
-                    println!("Punctuation: {}", punct);
+                    // println!("Punctuation: {}", punct);
                     vec![tt.clone()].into_iter()
                 },
                 TokenTree::Literal(literal) => {
-                    println!("Literal: {}", literal);
+                    // println!("Literal: {}", literal);
                     vec![tt.clone()].into_iter()
                 },
                 _ => {
-                    println!("Other token: {:#?}", tt);
+                    // println!("Other token: {:#?}", tt);
                     vec![tt.clone()].into_iter()
                 }
             }
