@@ -82,7 +82,7 @@ impl CfgBuilder {
                     
                         // Update the working condition
                         working_condition = Some(if let Some(existing_cond) = &working_condition {
-                            syn::parse2(quote! { #substituted_expr && #existing_cond }).expect("Failed to parse conjunction")
+                            syn::parse2(quote! { #substituted_expr >> #existing_cond }).expect("Failed to parse conjunction")
                         } else {
                             substituted_expr
                         });
@@ -93,7 +93,7 @@ impl CfgBuilder {
                         println!("Postcondition/Invariant after substitution: {}", quote! { #expr });
 
                         working_condition = Some(if let Some(existing_cond) = &working_condition {
-                            syn::parse2(quote! { #expr && #existing_cond }).expect("Failed to parse conjunction")
+                            syn::parse2(quote! { #expr >> #existing_cond }).expect("Failed to parse conjunction")
                         } else {
                             expr
                         });
@@ -104,7 +104,7 @@ impl CfgBuilder {
                         println!("Precondition after substitution: {}", quote! { #expr });
 
                         working_condition = Some(if let Some(existing_cond) = &working_condition {
-                            syn::parse2(quote! { #expr && #existing_cond }).expect("Failed to parse conjunction")
+                            syn::parse2(quote! { #expr >> #existing_cond }).expect("Failed to parse conjunction")
                         } else {
                             expr
                         });
