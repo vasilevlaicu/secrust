@@ -2,11 +2,13 @@ pub mod cfg_builder;
 pub mod dot_generator;
 pub mod path_finder;
 pub mod substitution;
+pub mod verifier;
 
 pub use cfg_builder::*;
 pub use dot_generator::*;
 pub use path_finder::*;
 pub use substitution::*;
+pub use verifier::*;
 
 use std::path::{PathBuf, Path};
 use syn::{visit::Visit};
@@ -74,6 +76,7 @@ pub fn run_verification(file_path: &PathBuf, generate_dot: bool) -> Result<(), B
         println!("DOT graph saved as: {:?}", dot_file_path);
     }
 
+    verifier::verify_conditions_for_paths();
     println!("Verification completed for {:?}", file_path);
     Ok(())
 }
