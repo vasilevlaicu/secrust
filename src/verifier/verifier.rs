@@ -2,7 +2,7 @@ use z3::{ast, Config, Context, Solver, SatResult};
 use z3::ast::Ast;
 use std::collections::HashMap;
 
-// Function to get or create Z3 integer variables
+// Get or create Z3 integer variables
 fn get_or_create_var<'a>(
     ctx: &'a Context,
     name: &str,
@@ -13,14 +13,14 @@ fn get_or_create_var<'a>(
         .clone()
 }
 
-// Function to verify Z3 condition and print the model if satisfiable
+// Verify Z3 condition and print the model if valid
 pub fn verify_condition(
     solver: &mut Solver,
     condition: &ast::Bool,
     vars: &HashMap<String, ast::Int>,
 ) -> bool {
     solver.push();
-    solver.assert(&condition.not()); // We assert the negation for proof by contradiction
+    solver.assert(&condition.not()); // assert the negation for proof by contradiction
     let result = match solver.check() {
         SatResult::Unsat => {
             println!("Condition is valid (unsatisfiable when negated).\n");
@@ -65,13 +65,13 @@ pub fn verify_conditions_for_paths() {
     // invariant: i <= n + 1 && sum == (i - 1) * i / 2
     let condition_path_1_pre = z3::ast::Bool::and(&ctx, &[
         &n.ge(&ast::Int::from_i64(&ctx, 0)),  // n >= 0
-        &i._eq(&ast::Int::from_i64(&ctx, 1)), // i starts at 1
-        &sum._eq(&ast::Int::from_i64(&ctx, 0)), // sum starts at 0 (assuming initial condition)
     ]);
     // invariant: i >= 1 && i <= n + 1 && sum == (i - 1) * i / 2
+    let one = ast::Int::from_i64(&ctx, 1);
+    let zero = ast::Int::from_i64(&ctx, 0);
     let condition_path_1_invariant = z3::ast::Bool::and(&ctx, &[
-        &i.le(&(n.clone() + ast::Int::from_i64(&ctx, 1))), // i <= n + 1
-        &sum._eq(&(&(i.clone() - ast::Int::from_i64(&ctx, 1)) * i.clone() / ast::Int::from_i64(&ctx, 2))), // sum == (i - 1) * i / 2
+        &one.le(&(n.clone() + one.clone())), // i <= n + 1
+        &zero._eq(&(&(one.clone() - one.clone()) * i.clone() / ast::Int::from_i64(&ctx, 2))), // sum == (i - 1) * i / 2
     ]);
 
     let condition_path_1 = z3::ast::Bool::implies(&condition_path_1_pre, &condition_path_1_invariant);
@@ -100,7 +100,7 @@ pub fn verify_conditions_for_paths() {
     verify_condition(&mut solver, &condition_path_2, &vars);
 
     // Path 3: invariant and (i <= n) imply updated invariant
-    // (i <= n + 1 && sum == (i - 1) * i / 2) >> i <= n >> invariant ! ((i + 1) <= n + 1 && (sum + i) == ((i + 1) - 1) * (i + 1) / 2)
+    // (i <= n + 1 && sum == (i - 1) * i / 2) >> (i <= n >> invariant ! ((i + 1) <= n + 1 && (sum + i) == ((i + 1) - 1) * (i + 1) / 2)
     let i_next = i.clone() + ast::Int::from_i64(&ctx, 1); // i + 1
     let sum_next = sum.clone() + i.clone(); // sum + 1
 
@@ -127,14 +127,12 @@ pub fn verify_conditions_for_paths() {
     );
     */
 
-    // This works as A -> B -> C <=> (A && B) => C
-    // (P1 ^ P2 ^ P3 ^ ... ^ Pn) => R
-    let condition_path_3 = z3::ast::Bool::implies(
-        &z3::ast::Bool::and(&ctx, &[
-            &condition_path_3_invariant_current,
+    // TODO FIX USE THIS NESTED IMPLICATION CHAIN
+    let condition_path_3 = z3::ast::Bool::implies(&condition_path_3_invariant_current,
+        &z3::ast::Bool::implies(
             &condition_path_3_i_le_n,
-        ]),
-        &condition_path_3_invariant_next,
+            &condition_path_3_invariant_next
+        ),
     );
 
     println!("\nVerifying conditions for Path 3:");

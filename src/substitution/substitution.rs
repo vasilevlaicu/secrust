@@ -39,6 +39,7 @@ impl CfgBuilder {
 
                             // Track the current variable state for potential future substitution
                             variable_state.insert(var.clone(), expr.clone());
+                            //println!("varState: {:?}", variable_state);
                         }
                     },
                     CfgNode::Condition(_, Some(conditional_expr)) => {
@@ -69,15 +70,6 @@ impl CfgBuilder {
                     CfgNode::Postcondition(_, Some(expr)) | CfgNode::Invariant(_, Some(expr)) => {
                         // Substitute variables in the postcondition/invariant and chain with the current condition
                         let expr = expr.clone();
-                        working_condition = Some(if let Some(existing_cond) = working_condition.take() {
-                            syn::parse2(quote! { #expr >> #existing_cond }).expect("Failed to parse conjunction")
-                        } else {
-                            expr
-                        });
-                    },
-                    CfgNode::Precondition(_, Some(expr)) => {
-                        // Substitute variables in the precondition and chain with the current condition
-                        let expr = self.substitute_variables(expr, &variable_state);
                         working_condition = Some(if let Some(existing_cond) = working_condition.take() {
                             syn::parse2(quote! { #expr >> #existing_cond }).expect("Failed to parse conjunction")
                         } else {
@@ -238,7 +230,7 @@ impl CfgBuilder {
             format!("{};", stmt.trim_end())
         };
 
-        // println!("Parsing statement: {}", stmt);
+        //println!("Parsing statement: {}", stmt);
     
         // Parse the statement into a syn::Stmt
         let stmt: syn::Stmt = match syn::parse_str(&stmt) {
@@ -250,10 +242,10 @@ impl CfgBuilder {
         };
     
         // Debug print the parsed statement
-        // println!("Parsed syn::Stmt: {:#?}", &stmt);
+        //println!("Parsed syn::Stmt: {:#?}", &stmt);
     
         if let syn::Stmt::Expr(syn::Expr::Assign(assign)) | syn::Stmt::Semi(syn::Expr::Assign(assign), _) = stmt.clone() {
-            // Handle simple assignments like `count = 0;`
+            // Handle simple assignments like 'count = 0;'
             if let syn::Expr::Path(path) = *assign.left {
                 if let Some(ident) = path.path.get_ident() {
                     let var = ident.to_string();
@@ -262,7 +254,7 @@ impl CfgBuilder {
                 }
             }
         } else if let syn::Stmt::Expr(syn::Expr::AssignOp(assign_op)) | syn::Stmt::Semi(syn::Expr::AssignOp(assign_op), _) = stmt.clone() {
-            // Handle compound assignments like `count += 1;`
+            // Handle compound assignments like 'count += 1;'
             if let syn::Expr::Path(path) = *assign_op.left {
                 if let Some(ident) = path.path.get_ident() {
                     let var = ident.to_string();
@@ -274,6 +266,15 @@ impl CfgBuilder {
                     });
                     // println!("Found compound assignment: {} = {:?}", var, right_expr);
                     return Some((var, right_expr));
+                }
+            }
+        }
+        // Handle 'let' like 'let mut sum = 0;'
+        else if let syn::Stmt::Local(local) = stmt.clone() {
+            if let syn::Pat::Ident(pat_ident) = &local.pat { // If we have an identifier (sum)
+                let var = pat_ident.ident.to_string(); // Take var identifier (string)
+                if let Some((_, expr)) = &local.init {
+                    return Some((var, *expr.clone())); // Return the id and literal it's initialized to (expr)
                 }
             }
         }
