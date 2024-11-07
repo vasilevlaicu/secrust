@@ -1,0 +1,1 @@
+- Added parentheses to conditions (assume) to fix issue where implications expect booleans right and left (without them the code finds a Path expr first and stops). This could be a limitating factor that will have to be updated. For now, weakest precondition calculus has either pre, post or invariant condition, linked with implications to assumes, so it should be ok.
