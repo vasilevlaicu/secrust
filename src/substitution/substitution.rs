@@ -67,9 +67,19 @@ impl CfgBuilder {
                             expr.clone()
                         });
                     },
+                    // TODO check what's extra here
                     CfgNode::Postcondition(_, Some(expr)) | CfgNode::Invariant(_, Some(expr)) => {
                         // Substitute variables in the postcondition/invariant and chain with the current condition
                         let expr = expr.clone();
+                        working_condition = Some(if let Some(existing_cond) = working_condition.take() {
+                            syn::parse2(quote! { #expr >> #existing_cond }).expect("Failed to parse conjunction")
+                        } else {
+                            expr
+                        });
+                    },
+                    CfgNode::Precondition(_, Some(expr)) => {
+                        // Substitute variables in the precondition and chain with the current condition
+                        let expr = expr.clone();//self.substitute_variables(expr, &variable_state);
                         working_condition = Some(if let Some(existing_cond) = working_condition.take() {
                             syn::parse2(quote! { #expr >> #existing_cond }).expect("Failed to parse conjunction")
                         } else {

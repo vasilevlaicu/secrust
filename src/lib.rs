@@ -53,7 +53,12 @@ pub fn run_verification(file_path: &PathBuf, generate_dot: bool) -> Result<(), B
 
     let updated_postconditions = builder.apply_substitution(&simple_paths);
     for (i, postcondition) in updated_postconditions.iter().enumerate() {
+        println!("---------");
         println!("Updated Postcondition for Path {}: {}", i + 1, postcondition);
+        verifier::verify_conditions_for_paths(postcondition);
+        println!("Verification completed for {:?}", postcondition);
+        println!("---------");
+        println!("");
     }
 
     if generate_dot {
@@ -76,8 +81,5 @@ pub fn run_verification(file_path: &PathBuf, generate_dot: bool) -> Result<(), B
         println!("DOT graph saved as: {:?}", dot_file_path);
     }
 
-    verifier::verify_conditions_for_paths();
-    verifier::verify_unsat_condition();
-    println!("Verification completed for {:?}", file_path);
     Ok(())
 }
