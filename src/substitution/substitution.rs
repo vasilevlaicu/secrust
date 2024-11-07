@@ -57,7 +57,15 @@ impl CfgBuilder {
                                 _ => conditional_expr.clone(),
                             }
                         } else {
-                            conditional_expr.clone()
+                            match conditional_expr {
+                                ConditionalExpr::If(expr_if) => {
+                                    ConditionalExpr::If(Box::new(Self::wrap_with_parens(*expr_if.clone())))
+                                }
+                                ConditionalExpr::While(expr_while) => {
+                                    ConditionalExpr::While(Box::new(Self::wrap_with_parens(*expr_while.clone())))
+                                }
+                                _ => conditional_expr.clone(),
+                            }
                         };
 
                         let expr = updated_expr.to_syn_expr();
@@ -109,6 +117,14 @@ impl CfgBuilder {
             }
         }
         false
+    }
+
+    fn wrap_with_parens(expr: Expr) -> Expr {
+        Expr::Paren(ExprParen {
+            attrs: Vec::new(),
+            paren_token: syn::token::Paren(Span::call_site()),
+            expr: Box::new(expr),
+        })
     }
 
     pub fn recursive_substitution(&self, expr: &Expr, var: &str, replacement_without_paren: &Expr) -> Expr {
