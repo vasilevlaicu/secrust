@@ -9,7 +9,7 @@ use petgraph::visit::EdgeRef;
 use std::path::{Path};
 
 impl CfgBuilder {
-    pub fn generate_simple_paths(&mut self) -> Vec<Vec<NodeIndex>> {
+    pub fn generate_basic_paths(&mut self) -> Vec<Vec<NodeIndex>> {
         let condition_nodes = self.get_condition_nodes();
         let mut paths = Vec::new();
 
@@ -137,7 +137,7 @@ impl CfgBuilder {
             dot_string.push_str("}\n");
 
             // Write the DOT file
-            let dot_file_path = base_path.join(format!("simple_path_{}.dot", i));
+            let dot_file_path = base_path.join(format!("basic_path_{}.dot", i));
             let mut dot_file = File::create(&dot_file_path).expect("Unable to create DOT file");
             dot_file.write_all(dot_string.as_bytes()).expect("Unable to write to DOT file");
         }

@@ -1,3 +1,24 @@
+/// This module handles variable substitution and logical condition chaining for Control Flow Graph (CFG) paths.
+/// This is the module to verify to add any new operations we'd like the cargo to handle.
+///
+/// The primary goal of this module is to substitute variables within the CFG nodes, particularly for conditions 
+/// like postconditions, and invariants, enabling weakest precondition calculations.
+/// 
+/// Key responsibilities include:
+/// - Traversing CFG paths and applying variable substitutions based on the current variable state.
+/// - Handling postcondition substitution to create a single logical condition for verification.
+/// - Formatting and chaining conditions using logical implication (`>>`).
+/// - Parsing assignment statements and substituting variables within expressions.
+/// - Recursively substituting variables in complex Rust syntax structures, including `if` conditions, loops, 
+///   macro calls, and nested expressions.
+/// - Adding parentheses where necessary to ensure proper precedence in logical conditions.
+/// 
+/// This module plays a critical role in translating the program's logical flow into a format suitable for formal verification.
+///
+/// Dependencies:
+/// - Relies on the `syn` crate for Rust syntax parsing.
+/// - Uses `petgraph` for traversing the CFG and maintaining node relationships.
+
 use syn::{Expr, Stmt, ExprAssign, ExprBinary, ExprBlock, ExprIf, ExprCall, ExprUnary, ExprParen, Local, ExprMacro, Macro, Block};
 use std::collections::HashMap;
 use quote::quote;

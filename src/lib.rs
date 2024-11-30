@@ -1,12 +1,8 @@
 pub mod cfg_builder;
-pub mod dot_generator;
-pub mod path_finder;
 pub mod substitution;
 pub mod verifier;
 
 pub use cfg_builder::*;
-pub use dot_generator::*;
-pub use path_finder::*;
 pub use substitution::*;
 pub use verifier::*;
 
@@ -49,9 +45,9 @@ pub fn run_verification(file_path: &PathBuf, generate_dot: bool) -> Result<(), B
     // post process cfg
     builder.post_process();
 
-    let simple_paths = builder.generate_simple_paths();
+    let basic_paths = builder.generate_basic_paths();
 
-    let updated_postconditions = builder.apply_substitution(&simple_paths);
+    let updated_postconditions = builder.apply_substitution(&basic_paths);
     for (i, postcondition) in updated_postconditions.iter().enumerate() {
         println!("---------");
         println!("Updated Postcondition for Path {}: {}", i + 1, postcondition);
@@ -62,7 +58,7 @@ pub fn run_verification(file_path: &PathBuf, generate_dot: bool) -> Result<(), B
     }
 
     if generate_dot {
-        // Save the DOT file and simple paths in the directory named after the input file
+        // Save the DOT file and basic paths in the directory named after the input file
         let output_base_path = Path::new("src/graphs");
         let file_stem = file_path.file_stem().unwrap(); // Get the file name without extension
         let output_dir = output_base_path.join(file_stem); // Create directory path as "src/graphs/filename"
@@ -70,8 +66,8 @@ pub fn run_verification(file_path: &PathBuf, generate_dot: bool) -> Result<(), B
         // Generate the DOT format for the entire CFG
         let dot_format = builder.to_dot();
 
-        // Save all simple paths inside the output directory
-        builder.write_paths_to_dot_files(simple_paths, &output_dir);
+        // Save all basic paths inside the output directory
+        builder.write_paths_to_dot_files(basic_paths, &output_dir);
 
         // Save the main DOT file in the same directory
         let dot_file_path = output_dir.join(format!("{}.dot", file_stem.to_string_lossy()));

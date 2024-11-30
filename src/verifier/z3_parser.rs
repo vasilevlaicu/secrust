@@ -221,7 +221,7 @@ fn generate_z3_ast<'a>(
                     }
                 }
                 BinOp::Shr(_) => {
-                    // println!("Detected `>>` operation in Syn AST:");
+                    // println!("Detected '>>' operation in Syn AST:");
                     // println!("Left: {:?}", left);
                     // println!("Right: {:?}", right);
                 
@@ -236,14 +236,14 @@ fn generate_z3_ast<'a>(
                     ) {
                         if let Expr::Binary(ExprBinary { left, op, right, .. }) = expr {
                             if matches!(op, BinOp::Shr(_)) {
-                                // If the left side is also a `>>`, traverse it recursively
+                                // If the left side is also a '>>', traverse it recursively
                                 extract_chain(ctx, left, vars, placeholder);
                 
                                 // Process the right side and add it to the placeholder
                                 if let Z3Var::Bool(right_bool) = generate_z3_ast(ctx, right, vars) {
                                     placeholder.add_argument(right_bool);
                                 } else {
-                                    panic!("Expected Bool type for right operand of `>>`");
+                                    panic!("Expected Bool type for right operand of '>>'");
                                 }
                                 return;
                             }
@@ -260,15 +260,15 @@ fn generate_z3_ast<'a>(
                     // Extract the left side chain
                     extract_chain(ctx, left, vars, &mut placeholder);
                 
-                    // Process the right side of the current `>>` operation
+                    // Process the right side of the current '>>' operation
                     if let Z3Var::Bool(right_bool) = generate_z3_ast(ctx, right, vars) {
                         placeholder.add_argument(right_bool);
                     } else {
                         println!("Left operand: {:?}", left);
-                        panic!("Expected Bool type for right operand of top-level `>>`: {:?}", right);
+                        panic!("Expected Bool type for right operand of top-level '>>': {:?}", right);
                     }
                 
-                    // Return the placeholder as a `Z3Var::Bool`
+                    // Return the placeholder as a 'Z3Var::Bool'
                     Z3Var::Bool(placeholder.to_z3_implies(ctx))
                 }                                                                                                                                                                               
                 _ => panic!("Unsupported binary operator: {:?}", op),
@@ -361,9 +361,9 @@ fn extract_implication_placeholder<'a>(
 fn try_as_implies<'a>(expr: &ast::Bool<'a>) -> Option<(ast::Bool<'a>, ast::Bool<'a>)> {
     let decl = expr.decl(); // Get the declaration (function/operator)
     if decl.kind() == z3::DeclKind::IMPLIES {
-        let args = expr.children(); // Use `children` to fetch the arguments
+        let args = expr.children(); // Use 'children' to fetch the arguments
         if args.len() == 2 {
-            let lhs = args[0].clone().try_into().ok()?; // Ensure it's a `Bool`
+            let lhs = args[0].clone().try_into().ok()?; // Ensure it's a 'Bool'
             let rhs = args[1].clone().try_into().ok()?;
             return Some((lhs, rhs));
         }
@@ -432,7 +432,7 @@ fn get_or_create_var<'a>(
         .clone()
 }
 
-// Helper methods for `Z3Var` to return specific types
+// Helper methods for 'Z3Var' to return specific types
 impl<'ctx> Z3Var<'ctx> {
     fn as_bool(&self) -> &ast::Bool<'ctx> {
         if let Z3Var::Bool(bool_var) = self {
