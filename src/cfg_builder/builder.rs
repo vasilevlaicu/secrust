@@ -72,6 +72,15 @@ impl CfgBuilder {
         }
     }
 
+    // Method called to build the CFG
+    pub fn build_cfg(&mut self, ast: &SynFile) {
+        // Visit the AST to build the CFG nodes and edges
+        self.visit_file(ast);
+
+        // Post-process the CFG to handle merges and cleanup
+        self.post_process();
+    }
+
     // Parse external conditions if there are any
     pub fn parse_external_definitions(file_path: &str) -> Result<ExternalMethods, Box<dyn std::error::Error>> {
         if !std::path::Path::new(file_path).exists() {

@@ -1,9 +1,9 @@
 pub mod cfg_builder;
-pub mod substitution;
+pub mod wp_calculus;
 pub mod verifier;
 
 pub use cfg_builder::*;
-pub use substitution::*;
+pub use wp_calculus::*;
 pub use verifier::*;
 
 use std::path::{PathBuf, Path};
@@ -40,19 +40,17 @@ pub fn run_verification(file_path: &PathBuf, generate_dot: bool) -> Result<(), B
 
     // visit ast
     let mut builder = CfgBuilder::new();
-    builder.visit_file(&ast);
 
-    // post process cfg
-    builder.post_process();
+    builder.build_cfg(&ast);
 
     let basic_paths = builder.generate_basic_paths();
 
-    let updated_postconditions = builder.apply_substitution(&basic_paths);
-    for (i, postcondition) in updated_postconditions.iter().enumerate() {
+    let final_implication = builder.apply_wp_calculus(&basic_paths);
+    for (i, implication) in final_implication.iter().enumerate() {
         println!("---------");
-        println!("Updated Postcondition for Path {}: {}", i + 1, postcondition);
-        verifier::verify_conditions_for_paths(postcondition);
-        println!("Verification completed for {:?}", postcondition);
+        println!("Final implication for Path {}: {}", i + 1, implication);
+        verifier::verify_str_implication(implication);
+        println!("Verification completed for {:?}", implication);
         println!("---------");
         println!("");
     }

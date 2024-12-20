@@ -14,8 +14,7 @@ impl CfgBuilder {
         let mut paths = Vec::new();
 
         for start_node in condition_nodes {
-            let mut visited = HashSet::new();
-            self.find_paths(start_node, &mut Vec::new(), &mut paths, &mut visited);
+            self.find_paths(start_node, &mut Vec::new(), &mut paths);
         }
 
         // Process paths to check for loops and invariants
@@ -45,12 +44,7 @@ impl CfgBuilder {
         current_node: NodeIndex,
         current_path: &mut Vec<NodeIndex>,
         paths: &mut Vec<Vec<NodeIndex>>,
-        visited: &mut HashSet<NodeIndex>,
     ) {
-        if visited.contains(&current_node) {
-           // Avoid cycles by not returning
-        }
-        visited.insert(current_node);
         current_path.push(current_node);
 
         // Collect edge information first to avoid borrowing issues
@@ -71,12 +65,11 @@ impl CfgBuilder {
         } else {
             // Continue exploring adjacent nodes
             for (target, edge_label) in edges_info {
-                self.find_paths(target, current_path, paths, visited);
+                self.find_paths(target, current_path, paths);
             }
         }
 
         current_path.pop();
-        visited.remove(&current_node);
     }
 
     fn is_loop_path(&self, path: &Vec<NodeIndex>) -> bool {

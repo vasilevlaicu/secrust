@@ -29,28 +29,18 @@ use crate::cfg_builder::node::{CfgNode};
 use proc_macro2::{Span, TokenTree, TokenStream};
 
 impl CfgBuilder {
-    pub fn apply_substitution(&self, paths: &[Vec<NodeIndex>]) -> Vec<String> {
+    pub fn apply_wp_calculus(&self, paths: &[Vec<NodeIndex>]) -> Vec<String> {
         let mut updated_postconditions = Vec::new();
 
         for path in paths {
             let mut variable_state = HashMap::new();
             let mut working_condition: Option<syn::Expr> = None;
-            let mut node_levels = HashMap::new();
-            let mut current_level = 0;
-
-            // Assign levels to nodes based on their position in the path
-            for &node_index in path.iter() {
-                node_levels.insert(node_index, current_level);
-                current_level += 1;
-            }
 
             // Traverse the path in reverse (from postcondition up to precondition)
             for &node_index in path.iter().rev() {
                 match &self.graph[node_index] {
                     CfgNode::Statement(stmt_str, stmt_option) => {
                         if let Some((var, expr)) = self.parse_assignment(stmt_str) {
-                            let node_level = node_levels[&node_index];
-
                             // Check if there is a working condition that needs substitution
                             if let Some(mut cond) = working_condition.take() {
                                 // Substitute once per variable
@@ -91,7 +81,7 @@ impl CfgBuilder {
 
                         let expr = updated_expr.to_syn_expr();
                         working_condition = Some(if let Some(existing_cond) = working_condition.take() {
-                            syn::parse2(quote! { #expr >> #existing_cond }).expect("Failed to parse conjunction")
+                            syn::parse2(quote! { #expr >> #existing_cond }).expect("Failed to parse condition implication")
                         } else {
                             expr.clone()
                         });
@@ -107,8 +97,8 @@ impl CfgBuilder {
                         });
                     },
                     CfgNode::Precondition(_, Some(expr)) => {
-                        // Substitute variables in the precondition and chain with the current condition
-                        let expr = expr.clone();//self.substitute_variables(expr, &variable_state);
+                        // Chain with the current condition
+                        let expr = expr.clone();
                         working_condition = Some(if let Some(existing_cond) = working_condition.take() {
                             syn::parse2(quote! { #expr >> #existing_cond }).expect("Failed to parse conjunction")
                         } else {
@@ -322,46 +312,12 @@ impl CfgBuilder {
                 let var = pat_ident.ident.to_string(); // Take var identifier (string)
                 if let Some((_, expr)) = &local.init {
                     return Some((var, *expr.clone())); // Return the id and literal it's initialized to (expr)
-                }
+                }   
             }
         }
     
         // println!("No valid assignment found in statement: {:#?}", stmt);
         None
-    }
-
-    fn substitute_variables(&self, expr: &syn::Expr, variable_state: &std::collections::HashMap<String, syn::Expr>) -> syn::Expr {
-        match expr {
-            syn::Expr::Path(expr_path) if expr_path.path.segments.len() == 1 => {
-                let var = expr_path.path.segments[0].ident.to_string();
-                if let Some(replacement) = variable_state.get(&var) {
-                    return replacement.clone();
-                }
-            }
-            syn::Expr::Unary(expr_unary) => {
-                let mut new_expr_unary = expr_unary.clone();
-                new_expr_unary.expr = Box::new(self.substitute_variables(&expr_unary.expr, variable_state));
-                return syn::Expr::Unary(new_expr_unary);
-            }
-            syn::Expr::Binary(expr_binary) => {
-                let mut new_expr_binary = expr_binary.clone();
-                new_expr_binary.left = Box::new(self.substitute_variables(&expr_binary.left, variable_state));
-                new_expr_binary.right = Box::new(self.substitute_variables(&expr_binary.right, variable_state));
-                return syn::Expr::Binary(new_expr_binary);
-            }
-            syn::Expr::Call(expr_call) => {
-                let mut new_expr_call = expr_call.clone();
-                new_expr_call.args = expr_call.args.iter().map(|arg| self.substitute_variables(arg, variable_state)).collect();
-                return syn::Expr::Call(new_expr_call);
-            }
-            syn::Expr::Paren(expr_paren) => {
-                let mut new_expr_paren = expr_paren.clone();
-                new_expr_paren.expr = Box::new(self.substitute_variables(&expr_paren.expr, variable_state));
-                return syn::Expr::Paren(new_expr_paren);
-            }
-            _ => {}
-        }
-        expr.clone()
     }
 
     fn print_expr_details(&self, expr: &Expr) {

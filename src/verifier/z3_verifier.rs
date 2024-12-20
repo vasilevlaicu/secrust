@@ -123,16 +123,6 @@ pub fn old_verify_conditions_for_paths() {
         &sum_next._eq(&(&(i_next.clone() - ast::Int::from_i64(&ctx, 1)) * i_next.clone() / ast::Int::from_i64(&ctx, 2))),
         ]);
 
-    /*
-    This doesn't work for us because we nest the implications instead of chaining them...
-    let condition_path_3 = z3::ast::Bool::implies(
-        &z3::ast::Bool::implies(
-            &condition_path_3_invariant_current,
-            &condition_path_3_i_le_n
-        ), &condition_path_3_invariant_next
-    );
-    */
-
     // TODO FIX USE THIS NESTED IMPLICATION CHAIN
     let condition_path_3 = z3::ast::Bool::implies(&condition_path_3_invariant_current,
         &z3::ast::Bool::implies(
@@ -195,13 +185,13 @@ pub fn verify_condition(
 }
 
 // Main verification function that uses the parser module
-pub fn verify_conditions_for_paths(expr_str: &str) {
+pub fn verify_str_implication(expr_str: &str) {
     // Z3 context and solver
     let cfg = Config::new();
     let ctx = Context::new(&cfg);
     let mut solver = Solver::new(&ctx);
     
-    //old_verify_conditions_for_paths();
+    //old_verify_str_implication();
     // Parse and process logical proposition
     let parsed_expr = syn::parse_str::<syn::Expr>(expr_str).expect("Failed to parse expression");
     let (z3_condition, vars) = z3_parser::generate_condition_and_vars(&ctx, &parsed_expr);
