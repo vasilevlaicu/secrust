@@ -4,7 +4,6 @@ pub mod wp_calculus;
 
 pub use cfg_builder::*;
 pub use verifier::*;
-pub use wp_calculus::*;
 
 use std::path::{Path, PathBuf};
 
