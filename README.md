@@ -26,9 +26,9 @@ Secrust currently supports simple Rust code:
    export LD_LIBRARY_PATH=/opt/homebrew/Cellar/z3/4.13.3/lib:$LD_LIBRARY_PATH
    ```
 
-3. Install `secrust` using Cargo:
+3. Install `secrust` pre-release using Cargo:
    ```bash
-   cargo install --path ../secrust
+   cargo install secrust --version 0.1.0-alpha.1
    ```
 
 ### Add Z3 on Windows
