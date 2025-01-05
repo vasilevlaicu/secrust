@@ -1,12 +1,9 @@
+use crate::cfg_builder::{builder::CfgBuilder, node::CfgNode};
 use petgraph::graph::NodeIndex;
-use std::collections::HashSet;
-use quote::quote;
+use petgraph::visit::EdgeRef;
 use std::fs::File;
 use std::io::Write;
-use crate::cfg_builder::{builder::CfgBuilder, node::CfgNode, node::ConditionalExpr};
-use crate::cfg_builder::handle_condition::*;
-use petgraph::visit::EdgeRef;
-use std::path::{Path};
+use std::path::Path;
 
 impl CfgBuilder {
     pub fn generate_basic_paths(&mut self) -> Vec<Vec<NodeIndex>> {
@@ -28,14 +25,17 @@ impl CfgBuilder {
     }
 
     fn get_condition_nodes(&self) -> Vec<NodeIndex> {
-        self.graph.node_indices()
-            .filter(|&n| matches!(
-                self.graph[n],
-                CfgNode::Precondition(_, _)
-                | CfgNode::Postcondition(_, _)
-                | CfgNode::Invariant(_, _)
-                | CfgNode::Cutoff(_)
-            ))
+        self.graph
+            .node_indices()
+            .filter(|&n| {
+                matches!(
+                    self.graph[n],
+                    CfgNode::Precondition(_, _)
+                        | CfgNode::Postcondition(_, _)
+                        | CfgNode::Invariant(_, _)
+                        | CfgNode::Cutoff(_)
+                )
+            })
             .collect()
     }
 
@@ -48,23 +48,25 @@ impl CfgBuilder {
         current_path.push(current_node);
 
         // Collect edge information first to avoid borrowing issues
-        let edges_info: Vec<(NodeIndex, String)> = self.graph.edges(current_node)
-        .map(|edge| (edge.target(), edge.weight().clone()))
-        .collect();
+        let edges_info: Vec<(NodeIndex, String)> = self
+            .graph
+            .edges(current_node)
+            .map(|edge| (edge.target(), edge.weight().clone()))
+            .collect();
 
         // Check for a terminal condition or another condition node
         if matches!(
             self.graph[current_node],
             CfgNode::Precondition(_, _)
-            | CfgNode::Postcondition(_, _)
-            | CfgNode::Invariant(_, _)
-            | CfgNode::Cutoff(_)
+                | CfgNode::Postcondition(_, _)
+                | CfgNode::Invariant(_, _)
+                | CfgNode::Cutoff(_)
         ) && current_path.len() > 1
         {
             paths.push(current_path.clone());
         } else {
             // Continue exploring adjacent nodes
-            for (target, edge_label) in edges_info {
+            for (target, _edge_label) in edges_info {
                 self.find_paths(target, current_path, paths);
             }
         }
@@ -76,7 +78,9 @@ impl CfgBuilder {
         // Check if there's a "back to loop" edge in the path, indicating a loop structure
         path.windows(2).any(|pair| {
             if let [from, to] = pair {
-                self.graph.edges_connecting(*from, *to).any(|edge| edge.weight() == "back to loop")
+                self.graph
+                    .edges_connecting(*from, *to)
+                    .any(|edge| edge.weight() == "back to loop")
             } else {
                 false
             }
@@ -87,7 +91,9 @@ impl CfgBuilder {
         if let Some(&first_node) = path.first() {
             if let CfgNode::Invariant(cond, expr) = &self.graph[first_node] {
                 // Create a new terminal node with the same invariant condition
-                let new_terminal_node = self.graph.add_node(CfgNode::Invariant(cond.clone(), expr.clone()));
+                let new_terminal_node = self
+                    .graph
+                    .add_node(CfgNode::Invariant(cond.clone(), expr.clone()));
 
                 // Remove the last node in the path
                 path.pop();
@@ -120,7 +126,12 @@ impl CfgBuilder {
 
                     if let Some(edge) = edges.first() {
                         let label = &self.graph[edge.id()];
-                        dot_string.push_str(&format!("{} -> {} [label=\"{}\"];\n", from.index(), to.index(), label));
+                        dot_string.push_str(&format!(
+                            "{} -> {} [label=\"{}\"];\n",
+                            from.index(),
+                            to.index(),
+                            label
+                        ));
                     } else {
                         dot_string.push_str(&format!("{} -> {};\n", from.index(), to.index()));
                     }
@@ -132,7 +143,9 @@ impl CfgBuilder {
             // Write the DOT file
             let dot_file_path = base_path.join(format!("basic_path_{}.dot", i));
             let mut dot_file = File::create(&dot_file_path).expect("Unable to create DOT file");
-            dot_file.write_all(dot_string.as_bytes()).expect("Unable to write to DOT file");
+            dot_file
+                .write_all(dot_string.as_bytes())
+                .expect("Unable to write to DOT file");
         }
     }
 }

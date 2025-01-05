@@ -1,4 +1,4 @@
-# secured-rust
+# secrust
 Adding annotations to Rust.
 
 # Run
@@ -64,6 +64,10 @@ Adding annotations to Rust.
 
 5. **Install `secrust` using Cargo:**
    ```cmd
+   cargo install secrust
+   ```
+   Or if you download the repo:
+   ```cmd
    cargo install --path ..\secrust
    ```
 
@@ -87,3 +91,8 @@ Analyze a file and generate DOT files for the Control Flow Graph:
 cargo secrust-verify src/main.rs --dot
 ```
 DOT files are created in the `src/graphs/filename` directory for the specified file (e.g., `src/main.rs`).
+
+# License  
+Licensed under either of:
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))

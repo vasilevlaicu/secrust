@@ -1,9 +1,8 @@
 use proc_macro2::TokenStream;
 use quote::ToTokens;
-use syn::{Expr, ExprForLoop, ExprIf, ExprReturn, ItemFn, Stmt};
+use syn::{Expr, ExprForLoop, ExprReturn, ItemFn, Stmt};
 
-#[derive(Clone)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ConditionalExpr {
     If(Box<Expr>),
     ForLoop(ExprForLoop),
@@ -19,7 +18,6 @@ impl ConditionalExpr {
     }
 }
 
-
 impl ToTokens for ConditionalExpr {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
@@ -30,8 +28,7 @@ impl ToTokens for ConditionalExpr {
     }
 }
 
-#[derive(Clone)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum CfgNode {
     Function(String, Option<ItemFn>),
     Precondition(String, Option<Expr>),
@@ -58,7 +55,12 @@ impl CfgNode {
             CfgNode::Return(ret, _) => (format!("return: {}", ret), "ellipse"),
         };
 
-        format!("{} [label=\"{}\", shape={}]", index, self.escape_quotes_for_dot(&label), shape)
+        format!(
+            "{} [label=\"{}\", shape={}]",
+            index,
+            self.escape_quotes_for_dot(&label),
+            shape
+        )
     }
 
     pub fn new_function(func_name: String, item_fn: ItemFn) -> Self {

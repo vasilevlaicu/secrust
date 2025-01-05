@@ -1,7 +1,12 @@
 [package]
 name = "secrust"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "A Rust crate for source-level verification using Weakest Precondition calculus."
+repository = "https://github.com/vasilevlaicu/secrust"
+documentation = "https://docs.rs/secrust"
+readme = "README.md"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
@@ -19,4 +24,4 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "cargo-secrust-verify"
-path = "src/main.rs"  # You'll need to create this file
+path = "src/main.rs"

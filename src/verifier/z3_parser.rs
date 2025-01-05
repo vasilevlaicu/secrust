@@ -1,15 +1,12 @@
-use z3::{ast, Context};
-use z3::ast::Ast;   
-use syn::{Expr, UnOp, ExprPath, ExprLit, ExprMacro, ExprBinary, ExprParen, ExprUnary, BinOp};
 use std::collections::HashMap;
-use std::ops::{Add, Sub, Mul, Div};
-use std::fmt;
-use z3::ast::Bool;
+use std::ops::{Add, Div, Mul, Sub};
+use syn::{BinOp, Expr, ExprBinary, ExprLit, ExprMacro, ExprParen, ExprPath, ExprUnary};
+use z3::ast::Ast;
+use z3::{ast, Context};
 
 // Enum to represent different Z3 variable types
-// (just using INT and bool for now)
-#[derive(Clone)]
-#[derive(Debug)]
+// (just using Int and bool for now)
+#[derive(Clone, Debug)]
 pub enum Z3Var<'ctx> {
     Int(ast::Int<'ctx>),
     Bool(ast::Bool<'ctx>),
@@ -38,12 +35,14 @@ impl<'a> ImplicationPlaceholder<'a> {
     }
 
     /// Converts the chain into nested Z3 implications
-    fn to_z3_implies(self, ctx: &'a Context) -> ast::Bool<'a> {
-        self.chain.into_iter().rev().reduce(|acc, expr| ast::Bool::implies(&expr, &acc))
+    fn to_z3_implies(self, _ctx: &'a Context) -> ast::Bool<'a> {
+        self.chain
+            .into_iter()
+            .rev()
+            .reduce(|acc, expr| ast::Bool::implies(&expr, &acc))
             .expect("ImplicationPlaceholder must have at least one argument")
     }
 }
-
 
 // Main function to generate Z3 condition and variables HashMap
 pub fn generate_condition_and_vars<'a>(
@@ -90,7 +89,13 @@ fn generate_z3_ast<'a>(
 ) -> Z3Var<'a> {
     match expr {
         Expr::Macro(ExprMacro { mac, .. }) => {
-            let macro_name = mac.path.segments.last().expect("Expected macro name").ident.to_string();
+            let macro_name = mac
+                .path
+                .segments
+                .last()
+                .expect("Expected macro name")
+                .ident
+                .to_string();
             if ["invariant", "pre", "post"].contains(&macro_name.as_str()) {
                 if let Ok(arg_expr) = syn::parse2::<Expr>(mac.tokens.clone()) {
                     return generate_z3_ast(ctx, &arg_expr, vars);
@@ -103,17 +108,15 @@ fn generate_z3_ast<'a>(
         }
         Expr::Lit(ExprLit { lit, .. }) => match lit {
             syn::Lit::Int(lit_int) => {
-                let int_value = lit_int.base10_parse::<i64>().expect("Expected integer literal");
+                let int_value = lit_int
+                    .base10_parse::<i64>()
+                    .expect("Expected integer literal");
                 Z3Var::Int(ast::Int::from_i64(ctx, int_value))
             }
-            syn::Lit::Bool(lit_bool) => {
-                Z3Var::Bool(ast::Bool::from_bool(ctx, lit_bool.value))
-            }
+            syn::Lit::Bool(lit_bool) => Z3Var::Bool(ast::Bool::from_bool(ctx, lit_bool.value)),
             _ => panic!("Unsupported literal type"),
         },
-        Expr::Paren(ExprParen { expr, .. }) => {
-            generate_z3_ast(ctx, expr, vars)
-        }
+        Expr::Paren(ExprParen { expr, .. }) => generate_z3_ast(ctx, expr, vars),
         Expr::Path(ExprPath { path, .. }) => {
             if let Some(ident) = path.get_ident() {
                 let var_name = ident.to_string();
@@ -132,28 +135,36 @@ fn generate_z3_ast<'a>(
             }
             _ => panic!("Unsupported unary operator: {:?}", op),
         },
-        Expr::Binary(ExprBinary { left, op, right, .. }) => {
+        Expr::Binary(ExprBinary {
+            left, op, right, ..
+        }) => {
             let left_ast = generate_z3_ast(ctx, left, vars);
             let right_ast = generate_z3_ast(ctx, right, vars);
 
             match op {
                 BinOp::And(_) => {
-                    if let (Z3Var::Bool(left_bool), Z3Var::Bool(right_bool)) = (left_ast, right_ast) {
+                    if let (Z3Var::Bool(left_bool), Z3Var::Bool(right_bool)) = (left_ast, right_ast)
+                    {
                         Z3Var::Bool(ast::Bool::and(ctx, &[&left_bool, &right_bool]))
                     } else {
                         panic!("Expected Bool types for And operation");
                     }
-                },
+                }
                 BinOp::Or(_) => {
-                    if let (Z3Var::Bool(left_bool), Z3Var::Bool(right_bool)) = (left_ast, right_ast) {
+                    if let (Z3Var::Bool(left_bool), Z3Var::Bool(right_bool)) = (left_ast, right_ast)
+                    {
                         Z3Var::Bool(ast::Bool::or(ctx, &[&left_bool, &right_bool]))
                     } else {
                         panic!("Expected Bool types for Or operation");
                     }
                 }
                 BinOp::Eq(_) => match (left_ast, right_ast) {
-                    (Z3Var::Int(left_int), Z3Var::Int(right_int)) => Z3Var::Bool(left_int._eq(&right_int)),
-                    (Z3Var::Bool(left_bool), Z3Var::Bool(right_bool)) => Z3Var::Bool(left_bool._eq(&right_bool)),
+                    (Z3Var::Int(left_int), Z3Var::Int(right_int)) => {
+                        Z3Var::Bool(left_int._eq(&right_int))
+                    }
+                    (Z3Var::Bool(left_bool), Z3Var::Bool(right_bool)) => {
+                        Z3Var::Bool(left_bool._eq(&right_bool))
+                    }
                     _ => panic!("Unsupported types for Eq operation"),
                 },
                 BinOp::Le(_) => {
@@ -170,7 +181,7 @@ fn generate_z3_ast<'a>(
                             panic!("Comparison operations require Int types only.");
                         }
                     }
-                },                                                                  
+                }
                 BinOp::Ge(_) => {
                     if let (Z3Var::Int(left_int), Z3Var::Int(right_int)) = (left_ast, right_ast) {
                         Z3Var::Bool(left_int.ge(&right_int))
@@ -224,9 +235,9 @@ fn generate_z3_ast<'a>(
                     // println!("Detected '>>' operation in Syn AST:");
                     // println!("Left: {:?}", left);
                     // println!("Right: {:?}", right);
-                
+
                     let mut placeholder = ImplicationPlaceholder::new();
-                
+
                     // Helper function to traverse and extract chained implications
                     fn extract_chain<'a>(
                         ctx: &'a Context,
@@ -234,11 +245,14 @@ fn generate_z3_ast<'a>(
                         vars: &mut HashMap<String, Z3Var<'a>>,
                         placeholder: &mut ImplicationPlaceholder<'a>,
                     ) {
-                        if let Expr::Binary(ExprBinary { left, op, right, .. }) = expr {
+                        if let Expr::Binary(ExprBinary {
+                            left, op, right, ..
+                        }) = expr
+                        {
                             if matches!(op, BinOp::Shr(_)) {
                                 // If the left side is also a '>>', traverse it recursively
                                 extract_chain(ctx, left, vars, placeholder);
-                
+
                                 // Process the right side and add it to the placeholder
                                 if let Z3Var::Bool(right_bool) = generate_z3_ast(ctx, right, vars) {
                                     placeholder.add_argument(right_bool);
@@ -248,7 +262,7 @@ fn generate_z3_ast<'a>(
                                 return;
                             }
                         }
-                
+
                         // If it's not a chain, process it as a standalone expression
                         if let Z3Var::Bool(expr_bool) = generate_z3_ast(ctx, expr, vars) {
                             placeholder.add_argument(expr_bool);
@@ -256,35 +270,38 @@ fn generate_z3_ast<'a>(
                             panic!("Expected Bool type for chain element");
                         }
                     }
-                
+
                     // Extract the left side chain
                     extract_chain(ctx, left, vars, &mut placeholder);
-                
+
                     // Process the right side of the current '>>' operation
                     if let Z3Var::Bool(right_bool) = generate_z3_ast(ctx, right, vars) {
                         placeholder.add_argument(right_bool);
                     } else {
                         println!("Left operand: {:?}", left);
-                        panic!("Expected Bool type for right operand of top-level '>>': {:?}", right);
+                        panic!(
+                            "Expected Bool type for right operand of top-level '>>': {:?}",
+                            right
+                        );
                     }
-                
+
                     // Return the placeholder as a 'Z3Var::Bool'
                     Z3Var::Bool(placeholder.to_z3_implies(ctx))
-                }                                                                                                                                                                               
+                }
                 _ => panic!("Unsupported binary operator: {:?}", op),
             }
         }
         other => {
-            println!("Encountered unsupported logical expression type: {:?}", other);
+            println!(
+                "Encountered unsupported logical expression type: {:?}",
+                other
+            );
             panic!("Unsupported logical expression");
         }
     }
 }
 
-fn post_process_implications<'a>(
-    expr: &ast::Bool<'a>,
-    ctx: &'a Context,
-) -> ast::Bool<'a> {
+fn post_process_implications<'a>(expr: &ast::Bool<'a>, ctx: &'a Context) -> ast::Bool<'a> {
     if let Some(placeholder) = extract_implication_placeholder(expr) {
         // Print the chain for debugging
         /*println!("Implication chain detected:");
@@ -325,13 +342,7 @@ fn post_process_implications<'a>(
     expr.clone() // Return the original expression if no placeholder or processing needed
 }
 
-
-
-
-
-fn extract_implication_placeholder<'a>(
-    expr: &ast::Bool<'a>,
-) -> Option<ImplicationPlaceholder<'a>> {
+fn extract_implication_placeholder<'a>(expr: &ast::Bool<'a>) -> Option<ImplicationPlaceholder<'a>> {
     if expr.decl().kind() == z3::DeclKind::IMPLIES {
         let args = expr.children();
 
@@ -362,23 +373,4 @@ fn get_or_create_var<'a>(
     vars.entry(name.to_string())
         .or_insert_with(|| Z3Var::Int(ast::Int::new_const(ctx, name)))
         .clone()
-}
-
-// Helper methods for 'Z3Var' to return specific types
-impl<'ctx> Z3Var<'ctx> {
-    fn as_bool(&self) -> &ast::Bool<'ctx> {
-        if let Z3Var::Bool(bool_var) = self {
-            bool_var
-        } else {
-            panic!("Expected Bool type, but found a different type.")
-        }
-    }
-
-    fn as_int(&self) -> &ast::Int<'ctx> {
-        if let Z3Var::Int(int_var) = self {
-            int_var
-        } else {
-            panic!("Expected Int type, but found a different type.")
-        }
-    }
 }

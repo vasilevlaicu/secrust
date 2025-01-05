@@ -1,10 +1,10 @@
-use syn::{ExprIf};
+use syn::ExprIf;
 
 use crate::cfg_builder::builder::CfgBuilder;
 use crate::cfg_builder::node::{CfgNode, ConditionalExpr};
+use proc_macro2::Span;
 use quote::quote;
-use syn::{ visit::{self, Visit}, Expr, Pat, ExprParen, ExprUnary, UnOp, token};
-use proc_macro2::{Span, TokenTree};
+use syn::{token, visit::Visit, Expr, ExprParen, ExprUnary, Pat, UnOp};
 
 impl CfgBuilder {
     pub fn handle_if_statement(&mut self, expr_if: &ExprIf) {
@@ -39,13 +39,13 @@ impl CfgBuilder {
                 Expr::If(elseif) => {
                     // Handle else if with recursion
                     self.handle_if_statement(elseif);
-                },
+                }
                 Expr::Block(block) => {
                     self.visit_block(&block.block);
-                },
+                }
                 _ => {
                     self.visit_expr(else_branch);
-                },
+                }
             }
 
             // Connect the end of the else branch to the merge point
@@ -67,18 +67,20 @@ impl CfgBuilder {
     pub fn negate_condition(expr: Expr) -> Expr {
         // unary negation expression with '!'
         let paren_expr = ExprParen {
-            attrs: Vec::new(), 
-            paren_token: token::Paren(Span::call_site()), 
-            expr: Box::new(expr), 
+            attrs: Vec::new(),
+            paren_token: token::Paren(Span::call_site()),
+            expr: Box::new(expr),
         };
-    
+
         // create a unary negation expression with '!' applied to the parenthesized expression
         let not_expr = ExprUnary {
             attrs: Vec::new(),
-            op: UnOp::Not(token::Bang { spans: [Span::call_site()] }),
-            expr: Box::new(Expr::Paren(paren_expr)), 
+            op: UnOp::Not(token::Bang {
+                spans: [Span::call_site()],
+            }),
+            expr: Box::new(Expr::Paren(paren_expr)),
         };
-    
+
         Expr::Unary(not_expr)
     }
 }
