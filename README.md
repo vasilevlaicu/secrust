@@ -1,5 +1,13 @@
-# secrust
-Adding annotations to Rust.
+# Secrust  
+**Secrust** is a Rust crate designed to add **formal verification** to Rust code. By adding lightweight annotations to Rust functions, Secrust enables developers to verify invariants, preconditions, and postconditions directly in their source code.
+
+Secrust leverages Rust's syntax and ecosystem, integrating with the language's tooling to provide an intuitive developer experience. The crate uses the Z3 SMT solver to reason about program correctness and generates Control Flow Graphs (CFGs) to visualize execution paths, making it easier to identify and eliminate logical errors. 
+
+### **Supported Syntax**  
+Secrust currently supports simple Rust code:
+- **Arithmetic operations**: Verifying computations involving addition, subtraction, multiplication, and division.
+- **Conditional statements**: Handling `if`/`else` branches to ensure correctness across all execution paths.
+- **Loops**: Reasoning about loop invariants and termination conditions to verify iterative logic.
 
 # Run
 ## Install secrust
@@ -91,6 +99,63 @@ Analyze a file and generate DOT files for the Control Flow Graph:
 cargo secrust-verify src/main.rs --dot
 ```
 DOT files are created in the `src/graphs/filename` directory for the specified file (e.g., `src/main.rs`).
+
+You can visualize DOT code online on [edotor.net](https://edotor.net/?engine=dot)
+
+## Tutorial: Verifying `sum_first_n`
+
+The following example demonstrates how to verify a simple Rust function using `secrust`.
+
+### Example Code
+Save the following code as `src/main.rs`:
+```rust
+use secrust::{build_cfg, invariant, old, post, pre};
+
+fn sum_first_n(n: i32) -> i32 {
+    pre!(n >= 0);
+    let mut sum = 0;
+    let mut i = 1;
+    invariant!(i <= n + 1 && sum == (i - 1) * i / 2);
+    while i <= n {
+        sum = sum + i;
+        i = i + 1;
+    }
+    post!(sum == n * (n + 1) / 2);
+    return sum;
+}
+
+fn main() {
+    let n = 5;
+    let sum = sum_first_n(n);
+    println!("Sum is: {}", sum);
+}
+```
+
+### Run Verification
+Run the `secrust` verification on this file:
+```bash
+cargo secrust-verify src/main.rs --dot
+```
+
+### Outputs
+1. **Verification Results**: The terminal will display the results of the verification, including logical implications and their validity status.
+2. **DOT Graphs**: Control Flow Graphs (CFGs) will be generated in the `src/graphs/main` directory.
+
+For example:
+- `main.dot` will contain the CFG for the `main` function.
+- `basic_path_0.dot` will contain the graph for the first basic execution path of the annotated `sum_first_n` function.
+
+To generate a DOT format CFG for any method without adding logical annotations, add the ```build_cfg!();``` macro at the start of the method.
+
+### Analyze the DOT Graph
+Use tools like `Graphviz` to visualize the DOT files:
+```bash
+dot -Tpng src/graphs/main/basic_path_0.dot -o basic_path_0.png
+```
+Or paste the DOT code on an online editor like [edotor.net](https://edotor.net/?engine=dot).
+### Expected Behavior
+- Verification checks the validity of the derived weakest precondition
+- Generated graphs provide a clear view of the control flow and verification conditions.
 
 # License  
 Licensed under either of:
