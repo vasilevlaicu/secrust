@@ -157,6 +157,122 @@ Or paste the DOT code on an online editor like [edotor.net](https://edotor.net/?
 - Verification checks the validity of the derived weakest precondition
 - Generated graphs provide a clear view of the control flow and verification conditions.
 
+## Running Example: Verifying `sum_first_n`
+
+To showcase how Secrust works, let’s walk through the verification process for a simple Rust function that calculates the sum of the first \( n \) integers.
+
+### Annotated Rust Code
+
+```rust
+use secrust::{pre, post, invariant};
+
+fn sum_first_n(n: i32) -> i32 {
+    pre!(n >= 0);
+    let mut sum = 0;
+    let mut i = 1;
+    invariant!(i <= n + 1 && sum == (i - 1) * i / 2);
+    while i <= n {
+        sum = sum + i;
+        i = i + 1;
+    }
+    post!(sum == n * (n + 1) / 2);
+    return sum;
+}
+
+fn main() {
+    let n = 0;
+    let sum = sum_first_n(n);
+    println!("Sum is: {}", sum);
+}
+```
+
+- **`pre!`** and **`post!`** annotate the function with input and output conditions.
+- **`invariant!`** provides the loop invariant, which must hold before and after each iteration of `while`.
+
+---
+
+### 1. Generating a CFG and Basic Paths
+
+When you run Secrust with the `--dot` flag:
+```bash
+cargo secrust-verify src/main.rs --dot
+```
+Secrust parses the AST to build a **Control Flow Graph (CFG)**, placing **cut points** at each annotation or branch. Then it extracts **basic paths**, each corresponding to a distinct route through the function.
+
+
+<summary>Example Overall CFG</summary>
+
+% image 1 here
+
+*Figure: CFG that highlights all basic paths extracted by Secrust.*
+
+
+Among the paths generated, let’s focus on **Path 3**, the route taken when the `while` condition `i <= n` is **true**.
+
+<summary>Sample Basic Path (Path 3)</summary>
+
+% image 2 here
+
+*Figure: Visualization of the DOT representation for basic path 3.*
+
+---
+
+### 2. Deriving the Weakest Precondition
+
+Secrust verifies each basic path by **traversing it backward** from the postcondition, repeatedly applying WP rules for:
+- **Assignment**: Substitute updated variables in the postcondition.
+- **Assume**: Add `condition => ...` logic.
+- **Assert**: Strengthen the precondition with `condition && ...`.
+- **Composition**: Combine consecutive statements via `wp(S1, wp(S2, Q))`.
+
+
+
+#### Example: Backward Substitution
+1. **Start** from the loop invariant at the “bottom” of the path:
+   `i <= n + 1 AND sum == (i - 1) * i / 2`
+
+2. **Move upward** through assignments like:
+   ```rust
+   sum = sum + i;
+   i = i + 1;
+   ```
+   which update `sum` to `sum + i` and `i` to `i + 1`. Secrust substitutes these into the invariant, yielding:
+   `(i + 1) <= n + 1 AND (sum + i) == ((i + 1) - 1) * (i + 1) / 2`
+
+3. **Encounter the `while i <= n`** (true branch). This adds an assumption:
+   `i <= n => ((i + 1) <= n + 1 AND (sum + i) == ((i + 1) - 1) * (i + 1) / 2)`
+
+4. **Finally**, we link it back to the loop’s *starting* invariant (the path’s precondition).
+
+5. Hence, the **final logical implication** for Path 3 is:
+`(i <= n + 1 AND sum == (i - 1) * i / 2) => (i <= n => ((i + 1) <= n + 1 AND (sum + i) == ((i + 1) - 1) * (i + 1) / 2))`
+---
+
+### 3. Z3 Verification
+
+After deriving this **implication**, Secrust:
+1. Builds a **Z3 AST** representing the formula in SMT-LIB syntax.
+2. Asserts its **negation** in Z3. If **unsatisfiable**, the original implication holds, thus verifying the path.
+
+Below is a simplified example of the final formula in SMT-LIB:
+```smt
+(=> (and (<= i (+ n 1)) (= sum (div (* (- i 1) i) 2)))
+    (=> (<= i n)
+        (and (<= (+ i 1) (+ n 1))
+             (= (+ sum i) (div (* (- (+ i 1) 1) (+ i 1)) 2)))))
+```
+Because the solver reports **unsatisfiable** for its negation, Path 3 is verified. Repeating this process for all basic paths ensures the entire function satisfies its preconditions, invariants, and postconditions.
+
+---
+
+### Summary
+
+1. **Annotated Rust Source** → `sum_first_n` with `pre!`, `post!`, and `invariant!`.
+2. **CFG Construction** → Identify cut points (annotations + loop edges).  
+3. **Basic Paths** → Distill distinct routes through the function.  
+4. **WP Backward Analysis** → Combine assignments, assumes, and asserts to derive a final logical condition.  
+5. **Z3 Check** → If all path formulas are valid, the function is verified.
+
 # License  
 Licensed under either of:
 - Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
