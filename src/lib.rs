@@ -1,20 +1,19 @@
 pub mod cfg_builder;
-pub mod wp_calculus;
 pub mod verifier;
+pub mod wp_calculus;
 
 pub use cfg_builder::*;
-pub use wp_calculus::*;
 pub use verifier::*;
+pub use wp_calculus::*;
 
-use std::path::{PathBuf, Path};
-use syn::{visit::Visit};
+use std::path::{Path, PathBuf};
+use syn::visit::Visit;
 
 use std::fs::{self, File};
 use std::io::Write;
 
-
 // Exporting macros for users
-#[macro_export] 
+#[macro_export]
 macro_rules! pre {
     ($($t:tt)*) => {{}};
 }
@@ -29,14 +28,34 @@ macro_rules! invariant {
     ($($t:tt)*) => {{}};
 }
 
-pub fn run_verification(file_path: &PathBuf, generate_dot: bool) -> Result<(), Box<dyn std::error::Error>> {
+#[macro_export]
+macro_rules! build_cfg {
+    ($($t:tt)*) => {{}};
+}
+
+#[macro_export]
+macro_rules! old {
+    ($($t:tt)*) => {{}};
+}
+
+pub fn run_verification(
+    file_path: &PathBuf,
+    generate_dot: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("file path: {:?}", file_path);
     let content = std::fs::read_to_string(&file_path)?;
-    println!("File content (first 100 characters):\n{}", &content[..content.len().min(100)]);
+    println!(
+        "File content (first 100 characters):\n{}",
+        &content[..content.len().min(100)]
+    );
 
     // parse file and build ast
     let ast = syn::parse_file(&content)?;
     println!("AST successfully parsed for file {:?}", file_path);
+
+    // Debug-print the AST
+    println!("Debug-print of the AST:");
+    println!("{:#?}", ast);
 
     // visit ast
     let mut builder = CfgBuilder::new();
@@ -70,7 +89,9 @@ pub fn run_verification(file_path: &PathBuf, generate_dot: bool) -> Result<(), B
         // Save the main DOT file in the same directory
         let dot_file_path = output_dir.join(format!("{}.dot", file_stem.to_string_lossy()));
         let mut dot_file = File::create(&dot_file_path).expect("Unable to create DOT file");
-        dot_file.write_all(dot_format.as_bytes()).expect("Unable to write to DOT file");
+        dot_file
+            .write_all(dot_format.as_bytes())
+            .expect("Unable to write to DOT file");
 
         println!("DOT graph saved as: {:?}", dot_file_path);
     }

@@ -1,5 +1,5 @@
 /// This module is responsible for building the Control Flow Graph (CFG) structure for Rust methods.
-/// 
+///
 /// The 'CfgBuilder' struct provides functionalities to:
 /// - Construct a CFG from Rust functions annotated with macros like 'pre!', 'post!', and 'invariant!'.
 /// - Add nodes and edges representing statements, conditions, and control flow.
@@ -8,24 +8,26 @@
 /// - Process various Rust expressions such as loops, conditions, and macros to build the CFG.
 ///
 /// This module relies on the 'petgraph' crate for graph manipulation and the 'syn' crate for parsing Rust code.
-
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::EdgeRef;
+use quote::quote;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
-use quote::quote;
-use syn::{visit::{self, Visit}, Expr, ExprAssign, ExprReturn, Block, File as SynFile, ItemFn, Pat, Stmt};
+use syn::{
+    visit::{self, Visit},
+    Block, Expr, ExprAssign, ExprReturn, File as SynFile, ItemFn, Pat, Stmt,
+};
 
-use crate::cfg_builder::node::{CfgNode, ConditionalExpr};
+use crate::cfg_builder::handle_call::*;
 use crate::cfg_builder::handle_condition::*;
 use crate::cfg_builder::handle_loops::*;
 use crate::cfg_builder::handle_macros::*;
 use crate::cfg_builder::handle_return::*;
-use crate::cfg_builder::handle_call::*;
+use crate::cfg_builder::node::{CfgNode, ConditionalExpr};
 
 // TODO add external method conditions when used.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -54,13 +56,16 @@ impl CfgBuilder {
     // Create new instance of CfgBuilder
     pub fn new() -> Self {
         // Attempt to load external conditions from the config file
-        let external_conditions = match Self::parse_external_definitions("src/config/conditions.json") {
-            Ok(conditions) => conditions,
-            Err(e) => {
-                eprintln!("Failed to load external conditions: {}", e);
-                ExternalMethods { external_methods: vec![] }
-            }
-        };
+        let external_conditions =
+            match Self::parse_external_definitions("src/config/conditions.json") {
+                Ok(conditions) => conditions,
+                Err(e) => {
+                    eprintln!("Failed to load external conditions: {}", e);
+                    ExternalMethods {
+                        external_methods: vec![],
+                    }
+                }
+            };
 
         // Initialize the graph and fields
         CfgBuilder {
@@ -82,17 +87,20 @@ impl CfgBuilder {
     }
 
     // Parse external conditions if there are any
-    pub fn parse_external_definitions(file_path: &str) -> Result<ExternalMethods, Box<dyn std::error::Error>> {
+    pub fn parse_external_definitions(
+        file_path: &str,
+    ) -> Result<ExternalMethods, Box<dyn std::error::Error>> {
         if !std::path::Path::new(file_path).exists() {
             eprintln!("Warning: External conditions file not found. Using empty conditions.");
-            return Ok(ExternalMethods { external_methods: vec![] });
+            return Ok(ExternalMethods {
+                external_methods: vec![],
+            });
         }
-    
+
         let file_content = fs::read_to_string(file_path)?;
         let external_methods: ExternalMethods = serde_json::from_str(&file_content)?;
         Ok(external_methods)
     }
-    
 
     // Method used to add postconditions at the end of graph
     pub fn add_postconditions(&mut self) {
@@ -108,7 +116,10 @@ impl CfgBuilder {
         let index = self.graph.add_node(node);
         if let Some(current) = self.current_node {
             // Use the label for the next edge if available
-            let label = self.next_edge_label.clone().unwrap_or_else(|| "".to_string());
+            let label = self
+                .next_edge_label
+                .clone()
+                .unwrap_or_else(|| "".to_string());
             self.graph.add_edge(current, index, label);
             // Reset the edge label
             self.next_edge_label = None;
@@ -137,8 +148,16 @@ impl CfgBuilder {
             let cfg_node = &self.graph[node];
             // Skip floating invariants
             if let CfgNode::Invariant(_, _) = cfg_node {
-                let has_incoming = self.graph.edges_directed(node, petgraph::Direction::Incoming).count() > 0;
-                let has_outgoing = self.graph.edges_directed(node, petgraph::Direction::Outgoing).count() > 0;
+                let has_incoming = self
+                    .graph
+                    .edges_directed(node, petgraph::Direction::Incoming)
+                    .count()
+                    > 0;
+                let has_outgoing = self
+                    .graph
+                    .edges_directed(node, petgraph::Direction::Outgoing)
+                    .count()
+                    > 0;
 
                 // If invariant is floating (no incoming or outgoing edges), skip it
                 if !has_incoming || !has_outgoing {
@@ -152,7 +171,10 @@ impl CfgBuilder {
             let source = edge.source().index();
             let target = edge.target().index();
             let label = edge.weight();
-            dot_string.push_str(&format!("{} -> {} [label=\"{}\"];\n", source, target, label));
+            dot_string.push_str(&format!(
+                "{} -> {} [label=\"{}\"];\n",
+                source, target, label
+            ));
         }
         dot_string.push_str("}\n");
         dot_string
@@ -162,8 +184,7 @@ impl CfgBuilder {
         let re = Regex::new(r"\s*([\(\)\[\]!\.,;])\s*").unwrap();
         let cleaned = re.replace_all(input, "$1").to_string();
 
-        cleaned.replace("vec! [", "vec![")
-               .replace("+ ", " + ")
+        cleaned.replace("vec! [", "vec![").replace("+ ", " + ")
     }
 
     pub fn format_condition(&self, expr: &Box<Expr>) -> String {
@@ -171,9 +192,11 @@ impl CfgBuilder {
         Self::clean_up_formatting(&raw_string)
     }
 
-    // Post process and merge CFG 'empty' nodes used for converging edges 
+    // Post process and merge CFG 'empty' nodes used for converging edges
     pub fn post_process(&mut self) {
-        let mut merge_nodes_to_process: Vec<NodeIndex> = self.graph.node_indices()
+        let mut merge_nodes_to_process: Vec<NodeIndex> = self
+            .graph
+            .node_indices()
             .filter(|&n| matches!(self.graph[n], CfgNode::MergePoint))
             .collect();
 
@@ -200,7 +223,9 @@ impl CfgBuilder {
         }
         // Clean up formatting in the node labels
         for node in self.graph.node_indices() {
-            if let CfgNode::Condition(label, _) | CfgNode::Statement(label, _) = &mut self.graph[node] {
+            if let CfgNode::Condition(label, _) | CfgNode::Statement(label, _) =
+                &mut self.graph[node]
+            {
                 *label = CfgBuilder::clean_up_formatting(label);
             }
         }
@@ -208,35 +233,40 @@ impl CfgBuilder {
 
     // merge converging nodes with other converging nodes
     fn merge_merge_nodes(&mut self, source: NodeIndex, target: NodeIndex) {
-        let incoming_edges: Vec<_> = self.graph.edges_directed(source, petgraph::Direction::Incoming)
+        let incoming_edges: Vec<_> = self
+            .graph
+            .edges_directed(source, petgraph::Direction::Incoming)
             .map(|e| (e.source(), e.weight().clone()))
             .collect();
-    
+
         for (source_of_edge, weight) in incoming_edges {
             self.graph.add_edge(source_of_edge, target, weight);
         }
         self.graph.remove_node(source);
     }
-    
-    // used to redirect edges of merged nodes 
+
+    // used to redirect edges of merged nodes
     fn redirect_edges_and_remove(&mut self, source: NodeIndex, new_target: NodeIndex) {
-        let incoming_edges: Vec<_> = self.graph.edges_directed(source, petgraph::Direction::Incoming)
+        let incoming_edges: Vec<_> = self
+            .graph
+            .edges_directed(source, petgraph::Direction::Incoming)
             .map(|e| (e.source(), e.weight().clone()))
             .collect();
-    
+
         for (source_of_edge, weight) in incoming_edges {
             self.graph.add_edge(source_of_edge, new_target, weight);
         }
-    
+
         self.graph.remove_node(source);
     }
 
     fn format_macro_args(&self, tokens: &proc_macro2::TokenStream) -> String {
         let tokens_str = tokens.to_string();
-        tokens_str.trim_start_matches("!(")
-                  .trim_end_matches(')')
-                  .trim_matches(|c| c == '"' || c == '\'')
-                  .to_string()
+        tokens_str
+            .trim_start_matches("!(")
+            .trim_end_matches(')')
+            .trim_matches(|c| c == '"' || c == '\'')
+            .to_string()
     }
 }
 
@@ -257,7 +287,8 @@ impl Visit<'_> for CfgBuilder {
                 if let Expr::Macro(expr_macro) = expr {
                     if let Some(macro_ident) = expr_macro.mac.path.get_ident() {
                         let macro_name = macro_ident.to_string();
-                        if ["pre", "post", "invariant"].contains(&macro_name.as_str()) {
+                        if ["pre", "post", "invariant", "build_cfg"].contains(&macro_name.as_str())
+                        {
                             contains_macros = true;
                             break;
                         }
@@ -278,25 +309,41 @@ impl Visit<'_> for CfgBuilder {
         // Process each statement in function body
         for stmt in &i.block.stmts {
             match stmt {
-                Stmt::Semi(expr, _) => { // Statement usually ending with semicolumn
+                Stmt::Semi(expr, _) => {
+                    // Statement usually ending with semicolumn
                     // Handle macro expressions
                     if let Expr::Macro(expr_macro) = expr {
                         if let Some(macro_ident) = expr_macro.mac.path.get_ident() {
                             let macro_name = macro_ident.to_string();
+                            if macro_name.as_str() == "build_cfg" {
+                                continue; // Skip processing this macro
+                            }
                             let macro_args = self.format_macro_args(&expr_macro.mac.tokens);
                             // handle annotation macros
                             let node = match macro_name.as_str() {
-                                "pre" => CfgNode::new_precondition(macro_args.clone(), Expr::Macro(expr_macro.clone())),
+                                "pre" => CfgNode::new_precondition(
+                                    macro_args.clone(),
+                                    Expr::Macro(expr_macro.clone()),
+                                ),
                                 "post" => {
-                                    let post_node = CfgNode::new_postcondition(macro_args.clone(), Expr::Macro(expr_macro.clone()));
+                                    let post_node = CfgNode::new_postcondition(
+                                        macro_args.clone(),
+                                        Expr::Macro(expr_macro.clone()),
+                                    );
                                     // add postconditions to vec to later merge them at the end of the CFG.
                                     self.postconditions.push(post_node.clone());
                                     post_node
-                                },
-                                "invariant" => CfgNode::new_invariant(macro_args.clone(), Expr::Macro(expr_macro.clone())),
+                                }
+                                "invariant" => CfgNode::new_invariant(
+                                    macro_args.clone(),
+                                    Expr::Macro(expr_macro.clone()),
+                                ),
                                 _ => {
                                     let expr_str = quote!(#i).to_string();
-                                    CfgNode::new_statement(expr_str, Stmt::Expr(Expr::Macro(expr_macro.clone())))
+                                    CfgNode::new_statement(
+                                        expr_str,
+                                        Stmt::Expr(Expr::Macro(expr_macro.clone())),
+                                    )
                                 }
                             };
                             if macro_name.as_str() != "post" {
@@ -308,7 +355,7 @@ impl Visit<'_> for CfgBuilder {
                     } else {
                         self.visit_expr(expr);
                     }
-                },
+                }
                 _ => self.visit_stmt(stmt),
             }
         }
@@ -319,31 +366,34 @@ impl Visit<'_> for CfgBuilder {
 
     // Processes Rust expressions (loops, conditions, macros, etc.)
     fn visit_expr(&mut self, i: &Expr) {
-        match i { 
+        match i {
             Expr::If(expr_if) => self.handle_if_statement(expr_if),
             Expr::While(expr_while) => self.handle_while_loop(expr_while),
             Expr::ForLoop(expr_for) => self.handle_for_loop(expr_for),
             Expr::Return(expr_return) => {
                 self.handle_return_statement(expr_return);
-            },
+            }
             Expr::Call(expr_call) => self.handle_call(expr_call),
             Expr::MethodCall(expr_method_call) => self.handle_method_call(expr_method_call),
             Expr::Macro(expr_macro) => {
                 self.process_macro(expr_macro); // method from the handle_macro module
-            },
+            }
             Expr::Array(expr_array) => {
                 for elem in &expr_array.elems {
                     self.visit_expr(elem); // Recursively visit to catch nested macros
                 }
-            },
+            }
             _ => {
-                // Handling invariant macro 
+                // Handling invariant macro
                 if let Expr::Macro(expr_macro) = i {
                     if let Some(macro_ident) = expr_macro.mac.path.get_ident() {
                         if macro_ident == "invariant" {
                             // Handling invariant
                             let invariant_str = self.format_macro_args(&expr_macro.mac.tokens);
-                            self.add_node(CfgNode::new_invariant(invariant_str, Expr::Macro(expr_macro.clone())));
+                            self.add_node(CfgNode::new_invariant(
+                                invariant_str,
+                                Expr::Macro(expr_macro.clone()),
+                            ));
                             return;
                         }
                     }
@@ -352,7 +402,7 @@ impl Visit<'_> for CfgBuilder {
                 let expr_str = quote!(#i).to_string();
                 let call_statement = Stmt::Expr(i.clone());
                 self.add_node(CfgNode::new_statement(expr_str, call_statement));
-            },
+            }
         }
     }
     // Method to visit code blocks
@@ -366,8 +416,10 @@ impl Visit<'_> for CfgBuilder {
             Stmt::Local(local) => {
                 // Handle local variable declarations
                 let local_str = format!("{}", quote!(#local));
-                self.add_node(CfgNode::new_statement(local_str, Stmt::Local(local.clone())));
-                
+                self.add_node(CfgNode::new_statement(
+                    local_str,
+                    Stmt::Local(local.clone()),
+                ));
             }
             Stmt::Expr(expr) | Stmt::Semi(expr, _) => self.visit_expr(expr),
             _ => visit::visit_stmt(self, i),
